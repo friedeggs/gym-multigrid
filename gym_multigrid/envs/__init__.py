@@ -1,2 +1,6 @@
 from gym_multigrid.envs.collect_game import CollectGame4HEnv10x10N2
 from gym_multigrid.envs.soccer_game import SoccerGame4HEnv10x15N2
+from gym_multigrid.envs.lava_game import LavaGame4HEnv10x12N2
+from gym_multigrid.envs.simple import SimpleEnv
+from gym_multigrid.envs.prosocial import ProsocialEnv
+from gym_multigrid.envs.curiosity import CuriousEnv

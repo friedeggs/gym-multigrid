@@ -15,7 +15,8 @@ class CollectGameEnv(MultiGridEnv):
         balls_index=[],
         balls_reward=[],
         zero_sum = False,
-        view_size=7
+        view_size=7,
+        render_mode = None,
 
     ):
         self.num_balls = num_balls
@@ -88,11 +89,12 @@ class CollectGameEnv(MultiGridEnv):
 
 
 class CollectGame4HEnv10x10N2(CollectGameEnv):
-    def __init__(self):
+    def __init__(self, render_mode = None):
         super().__init__(size=10,
         num_balls=[5],
         agents_index = [1,2,3],
         balls_index=[0],
         balls_reward=[1],
-        zero_sum=True)
+        zero_sum=True,
+        render_mode = None,)
 

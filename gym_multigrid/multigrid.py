@@ -2,11 +2,15 @@ import math
 import gym
 from enum import IntEnum
 import numpy as np
-from gym import error, spaces, utils
+from gym import error, utils
 from gym.utils import seeding
 from .rendering import *
 from .window import Window
 import numpy as np
+
+from gymnasium import spaces
+
+from pettingzoo import ParallelEnv
 
 # Size in pixels of a tile in the full-scale human view
 TILE_PIXELS = 32
@@ -275,14 +279,15 @@ class Door(WorldObj):
 
     def toggle(self, env, pos):
         # If the player has the right key to open the door
+        # import pdb; pdb.set_trace()
         if self.is_locked:
-            if isinstance(env.carrying, Key) and env.carrying.color == self.color:
+            if isinstance(env.agents[0].carrying, Key) and env.agents[0].carrying.color == self.color:
                 self.is_locked = False
                 self.is_open = True
                 return True
             return False
 
-        self.is_open = not self.is_open
+        # self.is_open = not self.is_open
         return True
 
     def encode(self, world, current_agent=False):
@@ -893,7 +898,8 @@ class MultiGridEnv(gym.Env):
             partial_obs=True,
             agent_view_size=7,
             actions_set=Actions,
-            objects_set = World
+            objects_set = World,
+            render_mode = None,
     ):
         self.agents = agents
 
@@ -918,7 +924,7 @@ class MultiGridEnv(gym.Env):
             self.observation_space = spaces.Box(
                 low=0,
                 high=255,
-                shape=(agent_view_size, agent_view_size, self.objects.encode_dim),
+                shape=(len(self.agents), agent_view_size, agent_view_size, self.objects.encode_dim),
                 dtype='uint8'
             )
 
@@ -926,7 +932,7 @@ class MultiGridEnv(gym.Env):
             self.observation_space = spaces.Box(
                 low=0,
                 high=255,
-                shape=(width, height, self.objects.encode_dim),
+                shape=(len(self.agents), width, height, self.objects.encode_dim),
                 dtype='uint8'
             )
 
@@ -951,7 +957,18 @@ class MultiGridEnv(gym.Env):
         # Initialize the state
         self.reset()
 
-    def reset(self):
+    # def action_space(self, agent_id):
+    #     return spaces.Discrete(len(self.actions.available))
+
+    # def observation_space(self, agent_id):
+    #     return spaces.Box(
+    #         low=0,
+    #         high=255,
+    #         shape=(1, self.width, self.height, self.objects.encode_dim),
+    #         dtype='uint8'
+    #     )
+
+    def reset(self, seed=None, options=None):
 
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
@@ -974,9 +991,9 @@ class MultiGridEnv(gym.Env):
         if self.partial_obs:
             obs = self.gen_obs()
         else:
-            obs = [self.grid.encode_for_agents(self.agents[i].pos) for i in range(len(self.agents))]
-        obs=[self.objects.normalize_obs*ob for ob in obs]
-        return obs
+            obs = [self.grid.encode_for_agents(self.world, self.agents[i].pos) for i in range(len(self.agents))]
+        obs=np.array([self.objects.normalize_obs*ob for ob in obs])
+        return obs, {}
 
     def seed(self, seed=1337):
         # Seed the random number generator
@@ -1020,10 +1037,13 @@ class MultiGridEnv(gym.Env):
         str = ''
 
         for j in range(self.grid.height):
-
             for i in range(self.grid.width):
-                if i == self.agent_pos[0] and j == self.agent_pos[1]:
-                    str += 2 * AGENT_DIR_TO_STR[self.agent_dir]
+                is_agent = False
+                for k in range(len(self.agent_pos)):
+                    if i == self.agent_pos[k][0] and j == self.agent_pos[k][1]:
+                        str += 2 * AGENT_DIR_TO_STR[self.agent_dir[k]]
+                        is_agent = True
+                if is_agent:
                     continue
 
                 c = self.grid.get(i, j)
@@ -1078,7 +1098,7 @@ class MultiGridEnv(gym.Env):
         Generate random integer in [low,high[
         """
 
-        return self.np_random.randint(low, high)
+        return self.np_random.integers(low, high)
 
     def _rand_float(self, low, high):
         """
@@ -1251,6 +1271,8 @@ class MultiGridEnv(gym.Env):
         rewards = np.zeros(len(actions))
         done = False
 
+        # print(actions)
+
         for i in order:
 
             if self.agents[i].terminated or self.agents[i].paused or not self.agents[i].started or actions[i] == self.actions.still:
@@ -1274,12 +1296,24 @@ class MultiGridEnv(gym.Env):
 
             # Move forward
             elif actions[i] == self.actions.forward:
+                rewards[i] = -0.9 * (1. / self.max_steps)
                 if fwd_cell is not None:
                     if fwd_cell.type == 'goal':
-                        done = True
-                        self._reward(i, rewards, 1)
+                        # done = True
+                        if i == 1 or len(self.agents) == 1:
+                            self._reward(i, rewards, 1)
+                            step_count = self.step_count
+                            self.reset()
+                            self.reset_counter += 1
+                            # print('reached goal', self.reset_counter)
+                            self.step_count = step_count
                     elif fwd_cell.type == 'switch':
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
+                    # elif fwd_cell.can_overlap():
+                    #     print('overlap')
+                    #     self.grid.set(*fwd_pos, self.agents[i])
+                    #     self.grid.set(*self.agents[i].pos, None)
+                    #     self.agents[i].pos = fwd_pos
                 elif fwd_cell is None or fwd_cell.can_overlap():
                     self.grid.set(*fwd_pos, self.agents[i])
                     self.grid.set(*self.agents[i].pos, None)
@@ -1299,6 +1333,7 @@ class MultiGridEnv(gym.Env):
 
             # Toggle/activate an object
             elif actions[i] == self.actions.toggle:
+                # print('toggle')
                 if fwd_cell:
                     fwd_cell.toggle(self, fwd_pos)
 
@@ -1315,7 +1350,7 @@ class MultiGridEnv(gym.Env):
         if self.partial_obs:
             obs = self.gen_obs()
         else:
-            obs = [self.grid.encode_for_agents(self.agents[i].pos) for i in range(len(actions))]
+            obs = [self.grid.encode_for_agents(self.world, self.agents[i].pos) for i in range(len(actions))]
 
         obs=[self.objects.normalize_obs*ob for ob in obs]
 

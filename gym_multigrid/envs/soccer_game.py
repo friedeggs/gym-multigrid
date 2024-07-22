@@ -17,7 +17,7 @@ class SoccerGameEnv(MultiGridEnv):
         agents_index = [],
         balls_index=[],
         zero_sum = False,
-
+        render_mode = None,
     ):
         self.num_balls = num_balls
         self.goal_pst = goal_pst
@@ -106,7 +106,7 @@ class SoccerGameEnv(MultiGridEnv):
 
 
 class SoccerGame4HEnv10x15N2(SoccerGameEnv):
-    def __init__(self):
+    def __init__(self, render_mode = None):
         super().__init__(size=None,
         height=10,
         width=15,
@@ -115,4 +115,5 @@ class SoccerGame4HEnv10x15N2(SoccerGameEnv):
         num_balls=[1],
         agents_index = [1,1,2,2],
         balls_index=[0],
-        zero_sum=True)
+        zero_sum=True,
+        render_mode = None,)
